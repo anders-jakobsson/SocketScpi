@@ -1,0 +1,13 @@
+name = "SocketScpi"
+uuid = "ee8d6ead-8ca2-43cf-a5dd-3b7d5e74e692"
+authors = ["Anders Jakobsson <anders.jakobsson@mykolab.com> and contributors"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.5"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
