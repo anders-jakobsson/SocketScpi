@@ -1,5 +1,14 @@
+"""
+	SocketScpi
+
+Support for sending SCPI commands to an instrument over a TCP socket.
+
+"""
 module SocketScpi
 
-# Write your package code here.
+export ScpiString, Instrument, @scpi_str, hasquery
+include("Exceptions.jl")
+include("ScpiString.jl")
+include("Instrument.jl")
 
 end
