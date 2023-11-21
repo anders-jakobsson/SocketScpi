@@ -48,6 +48,8 @@ The `Instrument` type
 The `ScpiString` type
 =====================
 
+NOTE!!! This is currently under development, don't use it!!!
+
 When an `Instrument` object is called with a string, as shown in the [Usage](#usage) section, the string is implicitly converted to a `ScpiString` object. The string can also be created explicitly by calling its constructor method:
 
 ```julia
