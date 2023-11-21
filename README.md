@@ -1,6 +1,8 @@
 Introduction
 ============
 
+NOTE!!! This is currently under development, don't use it!!!
+
 SocketScpi is a Julia package that enables [SCPI](https://www.ivifoundation.org/docs/scpi-99.pdf) communication with an instrument over TCP sockets. By relying on Julia [Sockets](https://docs.julialang.org/en/v1/stdlib/Sockets/) from the standard library, no additional drivers, e.g., VISA drivers are needed.
 
 The following types are exported.
@@ -47,8 +49,6 @@ The `Instrument` type
 
 The `ScpiString` type
 =====================
-
-NOTE!!! This is currently under development, don't use it!!!
 
 When an `Instrument` object is called with a string, as shown in the [Usage](#usage) section, the string is implicitly converted to a `ScpiString` object. The string can also be created explicitly by calling its constructor method:
 
