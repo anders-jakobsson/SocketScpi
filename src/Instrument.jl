@@ -1,16 +1,41 @@
 using Sockets
 
 
+"""
+	Instrument
+
+Type encapsulating an SCPI-capable instrument.
+
+# Fields
+	address::String    IPv4/IPv6 address string
+	port::UInt16       port number
+	timeout::UInt16    timeout in seconds
+	check::Symbol      verification method, `:none`, `:opc` or `:err`
+
+
+"""
 struct Instrument
 	address::String
 	port::UInt16
 	timeout::UInt16
 	check::Symbol
 
+	"""
+		Instrument(addr; port=5025, timeout=10, check=:none)
+	
+	Return an `Instrument` object with the given address, port, timeout and verification
+	method.
+
+	# Example
+	```julia-repl
+	inst = Instrument("192.168.0.83", port=5025, timeout=3, check=:opc)
+	Instrument("192.168.0.83", 5025, timeout=3, check=:opc)
+	```
+	"""
 	function Instrument(addr; port=5025, timeout=10, check=:none)
-		port∈(0:65535) || error("port number must be in the range [0:65535]")
-		timeout∈(1:65535) || error("timeout must be in the range [1:65535] seconds")
-		check∈(:none,:opc,:err) || error("unknown check mode ':$check', must be ':none', ':opc' or ':err'")
+		port∈(0:65535) || throw(ValueError("port number must be in the range [0:65535]"))
+		timeout∈(1:65535) || throw(ValueError("timeout must be in the range [1:65535] seconds"))
+		check∈(:none,:opc,:err) || throw(ValueError("unknown check mode ':$check', must be ':none', ':opc' or ':err'"))
 		new(addr,port,timeout,check)
 	end
 end
@@ -24,38 +49,38 @@ end
 
 
 """
-    (inst::Instrument)(command) -> Vector{String}
+	(inst::Instrument)(message; timeout=inst.timeout, check=inst.check) -> Vector{String}
 
-Send `command` to `inst`. `command` may be either an `AbstractString` or a `ScpiString`. 
-If `command` contains any query, read back the reply from the instrument. Return a vector 
-of all reply strings, or an empty `String` vector if no queries. An element of the return
-vector may be a comma separated list of values, 
+Send `message` to `inst`. `message` may be either an `AbstractString` or a `ScpiString`. 
+If `message` contains any query, read back the reply from the instrument. Return a vector 
+of strings with one element for each query. Throws a `TimeoutException` if a timeout 
+occurs while connecting or reading from the instrument.
 
-If the optional type argument is given, then further process the output. First of all,
-if there are no queries, return `nothing` instead of an empty vector. If exactly one 
-query, return a scalar instead of a one-element vector. Second, convert the result(s)
-to the given type. Throw an error unless all queries can be converted to `Type`. 
-
-	* String: 
+The optional `timeout` and `check` arguments allows overriding the default timeout and
+verification methods of `inst`. If `check=:opc`, an '*OPC?' (operation completed) query
+will be appended to `message`. The instrument will only reply to this query when all 
+pending operations are complete, hence this function will only return when all operations
+are complete, or the operation times out. The result of the '*OPC?' query is stripped from
+the return value. 
 
 # Examples
 ```julia-repl
-inst("SYSTEM:CAPABILITY?; :OUTPUT:STATE?")
+julia> inst("SYSTEM:CAPABILITY?; :OUTPUT:STATE?")
 2-element Vector{String}:
- "\"DCSUPPLY WITH (MEASURE|MULTIPLE|TRIGGER)\""
+ "\\"DCSUPPLY WITH (MEASURE|MULTIPLE|TRIGGER)\\""
  "0"
 ```
 """
-(inst::Instrument)(command::AbstractString; timeout=0) = (inst)(ScpiString(command), timeout=timeout)
+(inst::Instrument)(message::AbstractString; kwargs...) = (inst)(ScpiString(message); kwargs...)
 
-function (inst::Instrument)(command::ScpiString; timeout=inst.timeout, check=inst.check)
+function (inst::Instrument)(message::ScpiString; timeout=inst.timeout, check=inst.check)
 	if check===:opc
-		command = command*"*OPC?"
+		message = message * scpi"*OPC?"
 	elseif check===:err
-		command = "*CLS"*command*":SYSTEM:ERROR:CODE:NEXT?"
+		message = scpi"*CLS" * message * scpi":SYSTEM:ERROR:NEXT?"
 	end
-	cmd = command._str * "\n"
-	numq = numqueries(cmd)
+	numq = numqueries(message)
+	msg = message._str * "\n"
 	# tout = timeout>0 ? UInt16(timeout) : inst._timeout
 	# cwr = Channel{Bool}(1)
 	# twr = @async begin println("Connecting");connect(socket,inst._address,inst._port); put!(cwr,true); print("Connected") end
@@ -83,7 +108,7 @@ function (inst::Instrument)(command::ScpiString; timeout=inst.timeout, check=ins
 		close(timer)
 	end
 	
-	write(socket,cmd)
+	write(socket,msg)
 	
 	if numq>0
 		crd = Channel{String}(1)
@@ -91,6 +116,7 @@ function (inst::Instrument)(command::ScpiString; timeout=inst.timeout, check=ins
 		@async begin timedwait(()->istaskdone(trd),tout,pollint=1); put!(crd,"\n") end
 		reply = take!(crd)
 		close(crd)
+		close(socket)
 		if reply=="\n"
 			throw(TimeoutException("Could not read from instrument at $(inst.address) on port $(inst.port) since the operation timed out after $(tout) seconds"))
 		end
@@ -104,42 +130,158 @@ function (inst::Instrument)(command::ScpiString; timeout=inst.timeout, check=ins
 			errno,errmsg = split(response[end], ',')
 			errno=="0" || error("verification error: '$errmsg'")
 			retval = response[begin:end-1]
+		else
+			retval = response
 		end
 	else
+		close(socket)
 		retval = String[]
 	end
-	close(socket)
 	return retval
 end
 
-function (inst::Instrument)(::Type{String}, command)
-	response = inst(command)
-	if length(response)>1
-		return strip.(response, '\"')
-	elseif length(response)>0
-		return strip(response[begin], '\"')
+
+"""
+	(inst::Instrument)(String, message::ScpiString; kwargs...)
+
+Call `inst(message; kwargs...)` and then call `stringparse` on the result.
+"""
+function (inst::Instrument)(::Type{String}, message; kwargs...)
+	stringparse(inst(message; kwargs...))
+end
+
+
+"""
+	(inst::Instrument)(T, message::ScpiString; kwargs...) where T<:Number
+
+Call `inst(message; kwargs...)` and then call `numparse` on the result.
+"""
+function (inst::Instrument)(::Type{T}, message; kwargs...) where T<:Number
+	numparse(inst(message; kwargs...))
+end
+
+
+
+
+"""
+	stringparse(sv::Vector{String})
+
+Attempt to parse `sv` as a vector of quoted strings, return a string or vector of strings.
+
+The behavior depends on the length of `sv` and the contents of each element.
+
+* If `sv` has multiple elements, return `sv` with escaped double quotes removed. 
+* If `sv` has one element, try to split the element at non-quoted commas. \
+  If the result has more than one element, return it as is. Otherwise, return \
+  the first element. Throw an error if the number of escaped double quotes is odd.
+* If `sv` is empty, return `nothing`.
+
+# Examples
+```julia-repl
+julia> stringparse(["\\"A message\\""])
+"A message"
+```
+```julia-repl
+julia> stringparse(["\\"String1\\"", "\\"Sub-string2-1, Sub-string2-2\\"", "\\"String3\\""])
+3-element Vector{String}:
+ "String1"
+ "Sub-string2-1, Sub-string2-2"
+ "String3"
+```
+```julia-repl
+julia> stringparse(["\\"String1\\",\\"Sub-string2-1, Sub-string2-2\\",\\"String3\\""])
+3-element Vector{String}:
+ "String1"
+ "Sub-string2-1, Sub-string2-2"
+ "String3"
+```
+Note that non-quoted strings are also returned.
+```julia-repl
+julia> stringparse(["1", "\\"A message\\""])
+2-element Vector{String}:
+ "1"
+ "A message"
+```
+"""
+function stringparse(sv::Vector{String})
+	if length(sv)>1
+		return replace.(sv, '"'=>"")
+	elseif length(sv)>0
+		str = sv[begin]
+		iseven(count('"',str)) || error("unbalanced quotes in input string")
+		maxlen = count(',', str)+1
+		split_resp = Vector{String}(undef, maxlen)
+		stridx = vecidx = 1
+		quoted = false
+		for (k,c) in enumerate(str)
+			if c=='"'
+				quoted = !quoted
+			elseif !quoted && c==','
+				if k-1-stridx>0
+					split_resp[vecidx] = str[stridx:k-1]
+					vecidx += 1
+				end
+				stridx = k+1
+			end
+		end
+		if length(str)-1-stridx>0
+			split_resp[vecidx] = str[stridx:length(str)-1]
+			vecidx += 1
+		end
+		split_resp = replace.(split_resp[begin:vecidx-1], '"'=>"")
+		if length(split_resp)>1
+			return split_resp
+		else
+			return split_resp[begin]
+		end
 	else
 		return nothing
 	end
 end
 
-function (inst::Instrument)(::Type{T}, command) where T<:Number
-	response = inst(command)
-	if length(response)>1
-		return parse.(T, response)
-	elseif length(response)>0
-		return parse(T, response[begin])
-	else
-		return nothing
-	end
-end
 
-function (inst::Instrument)(::Type{Vector{T}}, command) where T<:Number
-	response = inst(command)
-	length(response)<2 || error("a maximum of one query is allowed when converting to an array")
-	if length(response)>0
-		',' in response[begin] || error("no vector data found in response string")
-		parse.(T, split(response[begin], ','))
+
+
+"""
+	numparse(T, sv::Vector{String}) where T<:Number
+
+Attempt to parse the content of `sv` as numbers of type `T`, return a number or vector of 
+numbers. Throw an error if parsing fails.
+
+The behavior depends on the length of `sv` and the contents of each element.
+
+* If `sv` has multiple elements, try to parse each element as a number of type `T`. 
+* If `sv` has one element, split the element at every comma. \
+  If the result has more than one element, parse and return that vector. Otherwise, \
+  parse and return the first element. 
+* If `sv` is empty, return `nothing`.
+
+# Examples
+```julia-repl
+julia> numparse(Int, ["1", "2", "3"])
+3-element Vector{Int64}:
+1
+2
+3
+```
+```julia-repl
+julia> numparse(Float64, ["-0.5, 0.0, +0.5"])
+3-element Vector{Float64}:
+ -0.5
+  0.0
+  0.5
+```
+"""
+function numparse(::Type{T}, sv::Vector{String}) where T<:Number
+	if length(sv)>1
+		return parse.(T, sv)
+	elseif length(sv)>0
+		split_resp = parse.(T, split(sv[begin], ','))
+		if length(split_resp)>1
+			return split_resp
+		else
+			return split_resp[begin]
+		end
 	else
 		return nothing
 	end

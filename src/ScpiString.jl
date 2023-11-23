@@ -2,7 +2,7 @@
 """
     ScpiString
 
-Type representing a SCPI command or set of commands.
+Type representing a SCPI message.
 """
 struct ScpiString
 	_str::String
@@ -20,15 +20,14 @@ end
 """
     ScpiString(xs...)
 
-Return an ScpiString built from `xs`. Equivalent to `scpi"SomeCommandText"`.
+Return an ScpiString built from `xs`. Equivalent to `scpi"SomeText"`.
 
 The input string `xs` is pre-procecced and validated. In case of additional string
-arguments, each is converted to an `ScpiString` and then concatenated as sub-commands, 
-see . Every argument may also contain multiple sub-commands 
-on their own. Note that while a SCPI command is terminated with a newline '\n', it is not 
+arguments, each is converted to an `ScpiString` and then concatenated, see TODO. Note that 
+while a SCPI message is terminated with a newline '\n', it is not 
 neccessary to terminate `xs` with a newline as this will be added automatically when sending
-the command. In fact, any leading or trailing newline or whitespace will be removed by the
-constructor. At the same time, no newline character is allowed within a command.
+the message. In fact, any leading or trailing newline or whitespace will be removed by the
+constructor. At the same time, no newline character is allowed within a message.
 
 # Examples
 ```julia-repl
@@ -52,7 +51,7 @@ ScpiString(xs...) = prod(ScpiString.(xs))
 
 # Macros --------------------------------------------------------------------------------------------------------------
 """
-	scpi"<command>"
+	scpi"<message>"
 
 Create a ScpiString object from a string. 
 """
@@ -90,9 +89,9 @@ function Base.show(io::IO, s::ScpiString)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", s::ScpiString)
-	cmds = split(s._str, ';', keepempty=false)
+	cmds = _split_cmd(s)
 	numc = length(cmds)
-	numq = count('?', s._str)
+	numq = numqueries(s)
 	@assert numc>0
 	cstr = numc>1 ? "$numc commands" : "one command"
 	qstr = numq>1 ? "$numq are queries" : numq>0 ? "one is a query" : "none are queries"
@@ -126,8 +125,6 @@ Base.promote_rule(::Type{<:AbstractString}, ::Type{ScpiString}) = ScpiString
 
 Concatenate two SCPI strings, or a SCPI string and an AbstractString. A semicolon will automatically be added between
 the strings.
-
-See also [`^(::ScpiString,::ScpiString)`](@ref)
 """
 Base.:*(x::ScpiString, y::ScpiString...) = ScpiString(join(vcat(x._str,[s._str for s in y]), ';'))
 Base.:*(x::AbstractString, y::ScpiString) = *(promote(x,y)...)
@@ -138,9 +135,7 @@ Base.:*(x::ScpiString, y::AbstractString) = *(promote(x,y)...)
 	^(x::ScpiString, y::Integer) -> ScpiString
 	x ^ y -> ScpiString
 
-Repeat SCPI command `x` `y` times by concatenation.
-
-See also [`*(::ScpiString,::ScpiString...)`](@ref)
+Repeat SCPI message `x` `y` times by concatenation.
 """
 Base.:^(x::ScpiString, y::Integer) = ScpiString(join(fill(x._str,y), ";"))
 
@@ -160,7 +155,7 @@ Base.eltype(::Type{ScpiString}) = SubString{String}
 """
     hasquery(x::ScpiString) -> Bool
 
-Return `true` if `x` contains at least one query, i.e., a command containing a '?'.
+Return `true` if `x` contains at least one query, i.e., a message containing a '?'.
 """
 hasquery(s::ScpiString) = '?' ∈ s._str
 
@@ -170,7 +165,7 @@ hasquery(s::ScpiString) = '?' ∈ s._str
 
 Return the number of queries in `x`.
 """
-numqueries(s::ScpiString) = count('?', x._str)
+numqueries(s::ScpiString) = count('?', s._str)
 
 
 """

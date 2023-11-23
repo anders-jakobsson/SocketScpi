@@ -9,7 +9,23 @@ The following types are exported.
 * ScpiString
 
 `Instrument` is an object that encapsulates the properties needed to communicate with an instrument. This includes its address and port, as well as default timeout. An `Instrument` object is callable. Instrument communication is performed by calling the object with an `ScpiString`. A
-`ScpiString` is a string that is formated as an [SCPI](https://www.ivifoundation.org/docs/scpi-99.pdf) command. A command can be made up of multiple sub-commands separated by semicolons.
+`ScpiString` is a string that is formated as an [SCPI](https://www.ivifoundation.org/docs/scpi-99.pdf) message. A message can be made up of multiple commands separated by semicolons.
+
+
+SCPI basics
+-----------
+
+SCPI defines a protocol for messages sent to, or received from, the instrument. Messages are made up of commands. Commands sent to the instrument can be divided into three types:
+
+      * Control commands
+      * Query commands
+      * Event commands
+
+_Control commands_ alters a setting or state in the instrument. These commands take one or more arguments. _Query commands_ asks the instrument to return the current value of a setting. These commands may also take arguments to further specify what to return. Most control command have a corresponding query command. _Event commands_ triggers the instrument to perform an action. These commands do not take arguments, and do not have a query form.
+
+Commands can also be divded into two other types, _common commands_ and _subsystem commands_. _Common commands_ are easy to identify because they have a leading asterisk followed by three letters. These commands are common to all SCPI instruments and control high level functions. Examples include "*IDN?" and "*RST". _Subsystem commands_ on the other hand target specific functionality within the instrument. Examples include ":CONTrol" and ":SYSTem".
+
+
 
 Installation
 ------------
@@ -20,6 +36,7 @@ Note! This package is not yet official, and must be installed from its GitHub re
 using Pkg
 Pkg.add("<package-url>")
 ```
+
 
 Usage
 -----
