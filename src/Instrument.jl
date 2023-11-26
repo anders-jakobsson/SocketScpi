@@ -180,16 +180,14 @@ The behavior depends on the length of `sv` and the contents of each element.
 ```julia-repl
 julia> stringparse(["\\"A message\\""])
 "A message"
-```
-```julia-repl
+
 julia> stringparse(["\\"String1\\"", "\\"Sub-string2-1, Sub-string2-2\\"", "\\"String3\\""])
 3-element Vector{String}:
  "String1"
  "Sub-string2-1, Sub-string2-2"
  "String3"
-```
-```julia-repl
-julia> stringparse(["\\"String1\\",\\"Sub-string2-1, Sub-string2-2\\",\\"String3\\""])
+
+ julia> stringparse(["\\"String1\\",\\"Sub-string2-1, Sub-string2-2\\",\\"String3\\""])
 3-element Vector{String}:
  "String1"
  "Sub-string2-1, Sub-string2-2"
