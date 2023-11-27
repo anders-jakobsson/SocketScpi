@@ -157,7 +157,7 @@ end
 Call `inst(message; kwargs...)` and then call `numparse` on the result.
 """
 function (inst::Instrument)(::Type{T}, message; kwargs...) where T<:Number
-	numparse(inst(message; kwargs...))
+	numparse(T, inst(message; kwargs...))
 end
 
 
