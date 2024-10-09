@@ -73,7 +73,7 @@ The ScpiString type
 When an `Instrument` object is called with a string, as shown in the [Usage](#usage) section, the string is implicitly converted to a `ScpiString` object. The string can also be created explicitly by calling its constructor method:
 
 ```@docs
-ScpiString(xs...)
+ScpiString
 ```
 
 A benefit of explicitly creating an `ScpiString` is that printing it reveal some valuable visual information about it. The last example above illustrates this. The printout indents every sub-command to its active anchor. The second sub-command 'SPAN 100MHz' lacks a leading colon, meaning it is anchored to the previous sub-command, or ':FREQ:'. This allows to visually inspect the commands for correctness. For example, if the last sub-command was accidently prefixed with a semicolon instead of a colon, it would get anchored to ':INIT:'. This would 

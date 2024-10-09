@@ -1,9 +1,4 @@
 
-"""
-    ScpiString
-
-Type representing a SCPI message.
-"""
 struct ScpiString
 	_str::String
 
@@ -16,45 +11,17 @@ struct ScpiString
 	end
 end
 
+function ScpiString(xs::Union{ScpiString,AbstractString}...)
+	length(xs)>0 || error("no input string")
+	prod(ScpiString.(xs))
+end
 
-"""
-    ScpiString(xs...)
-
-Return an ScpiString built from `xs`. Equivalent to `scpi"SomeText"`.
-
-The input string `xs` is pre-procecced and validated. In case of additional string
-arguments, each is converted to an `ScpiString` and then concatenated, see TODO. Note that 
-while a SCPI message is terminated with a newline '\n', it is not 
-neccessary to terminate `xs` with a newline as this will be added automatically when sending
-the message. In fact, any leading or trailing newline or whitespace will be removed by the
-constructor. At the same time, no newline character is allowed within a message.
-
-# Examples
-```julia-repl
-julia> ScpiString("*IDN?")
-SCPI string with one command of which one is a query
- *IDN?
-```
-```julia-repl
-julia> ScpiString(":FREQ:CENT 1GHz", "SPAN 100MHz", ":INIT:CONT?", ":TRAC:CLE ALL")
-SCPI string with 4 commands of which one is a query
- :FREQ:CENT 1GHz
-       SPAN 100MHz
- :INIT:CONT?
- :TRAC:CLE ALL
-```
-"""
-ScpiString(xs...) = prod(ScpiString.(xs))
+ScpiString(str::ScpiString) = ScpiString(str._str)
 
 
 
 
-# Macros --------------------------------------------------------------------------------------------------------------
-"""
-	scpi"<message>"
-
-Create a ScpiString object from a string. 
-"""
+# Macros -----------------------------------------------------------------------------------
 macro scpi_str(str)
 	return ScpiString(unescape_string(str))
 end
@@ -62,7 +29,7 @@ end
 
 
 
-# Printing ------------------------------------------------------------------------------------------------------------
+# Printing ---------------------------------------------------------------------------------
 function Base.show(io::IO, s::ScpiString)
 	if get(io, :compact, false)
 		maxlength = displaysize(io)[2] - 10
@@ -110,39 +77,23 @@ end
 
 
 
-# Conversion & Promotion ----------------------------------------------------------------------------------------------
+# Conversion & Promotion -------------------------------------------------------------------
 Base.convert(::Type{ScpiString}, x::AbstractString) = ScpiString(x)
 Base.promote_rule(::Type{<:AbstractString}, ::Type{ScpiString}) = ScpiString
 
 
 
 
-# Operators -----------------------------------------------------------------------------------------------------------
-"""
-    *(x::ScpiString, y::AbstractString) -> ScpiString
-    *(x::AbstractString, y::ScpiString) -> ScpiString
-    x * y -> ScpiString
-
-Concatenate two SCPI strings, or a SCPI string and an AbstractString. A semicolon will automatically be added between
-the strings.
-"""
+# Operators --------------------------------------------------------------------------------
 Base.:*(x::ScpiString, y::ScpiString...) = ScpiString(join(vcat(x._str,[s._str for s in y]), ';'))
 Base.:*(x::AbstractString, y::ScpiString) = *(promote(x,y)...)
 Base.:*(x::ScpiString, y::AbstractString) = *(promote(x,y)...)
-
-
-"""
-	^(x::ScpiString, y::Integer) -> ScpiString
-	x ^ y -> ScpiString
-
-Repeat SCPI message `x` `y` times by concatenation.
-"""
 Base.:^(x::ScpiString, y::Integer) = ScpiString(join(fill(x._str,y), ";"))
 
 
 
 
-# Iterate implementation ----------------------------------------------------------------------------------------------
+# Iterate implementation -------------------------------------------------------------------
 Base.iterate(s::ScpiString) = iterate(_split_cmd(s))
 Base.iterate(s::ScpiString, state::Int) = iterate(_split_cmd(s), state)
 Base.length(s::ScpiString) = length(_split_cmd(s))
@@ -151,32 +102,11 @@ Base.eltype(::Type{ScpiString}) = SubString{String}
 
 
 
-# Misc. functions -----------------------------------------------------------------------------------------------------
-"""
-    hasquery(x::ScpiString) -> Bool
-
-Return `true` if `x` contains at least one query, i.e., a message containing a '?'.
-"""
+# Misc. functions --------------------------------------------------------------------------
 hasquery(s::ScpiString) = '?' ∈ s._str
-
-
-"""
-    numqueries(x::ScpiString) -> Int
-
-Return the number of queries in `x`.
-"""
 numqueries(s::ScpiString) = count('?', s._str)
-
-
-"""
-    validate(s::ScpiString)
-	validate(s::AbstractString)
-	validate(ls::AbstractVector{<:AbstractString})
-
-Validate the format of `s` and return an error message if invalid, or an empty string if valid. If multiple 
-errors exist in the string, only the first error is returned.
-"""
 validate(s::ScpiString) = validate(s._str)
+
 function validate(s::AbstractString)
 	for cmd in _split_cmd(s)
 		isascii(cmd) || return("non-ASCII character(s) found in command '$cmd'")
@@ -188,7 +118,6 @@ end
 
 
 
-# Internal functions --------------------------------------------------------------------------------------------------
-
+# Internal functions -----------------------------------------------------------------------
 _split_cmd(s::ScpiString) = _split_cmd(s._str)
 _split_cmd(s::AbstractString) = split(s, ';', keepempty=false)
